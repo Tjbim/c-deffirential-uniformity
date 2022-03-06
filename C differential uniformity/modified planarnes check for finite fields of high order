@@ -1,0 +1,674 @@
+#from cysignals.signals cimport sig_check
+#from cpython.array cimport array
+#from sage cimport *
+#cython.wraparound=False
+#cython.boundscheck=False
+
+
+import sys
+from itertools import product
+#main import core, duplicated for correct respose
+import sage
+cimport sage
+import cython
+cimport cython
+cimport numpy as np
+import numpy as np
+
+
+#Import structure of finite fields
+
+from sage.rings.finite_rings.finite_field_base cimport FiniteField
+from cysignals.signals cimport sig_on, sig_off
+from cypari2.paridecl cimport *
+from sage.misc.randstate cimport randstate, current_randstate
+from sage.rings.finite_rings.finite_field_base cimport FiniteField
+from sage.rings.finite_rings.finite_field_constructor import GF
+from sage.rings.ring import Field
+
+from sage.rings.ring cimport Ring
+from sage.structure.richcmp cimport richcmp
+from sage.structure.element cimport Element, ModuleElement, RingElement
+import operator
+import sage.arith.all
+import sage.interfaces.gap
+from sage.libs.pari.all import pari
+from cypari2.gen cimport Gen
+from cypari2.stack cimport clear_stack
+from sage.structure.parent cimport Parent
+from sage.rings.all import PolynomialRing
+
+#from sage.structure.element cimport Element
+from sage.structure.parent cimport Parent
+from sage.rings.integer import Integer
+
+#Lagrange pol libs
+
+from sage.structure.element import Element
+from sage.structure.element import is_RingElement
+
+import sage.categories as categories
+from sage.categories.morphism import IdentityMorphism
+
+import sage.algebras.algebra
+import sage.rings.commutative_algebra as commutative_algebra
+import sage.rings.ring as ring
+from sage.structure.element import is_RingElement
+import sage.rings.polynomial.polynomial_element_generic as polynomial_element_generic
+import sage.rings.rational_field as rational_field
+from sage.rings.rational_field import QQ
+from sage.rings.integer_ring import ZZ
+from sage.rings.integer import Integer
+from sage.rings.number_field.number_field_base import is_NumberField
+from sage.libs.pari.all import pari_gen
+from sage.rings.polynomial.polynomial_ring_constructor import polynomial_default_category
+
+import sage.misc.latex as latex
+from sage.misc.prandom import randint
+from sage.misc.cachefunc import cached_method
+from sage.misc.lazy_attribute import lazy_attribute
+
+from sage.rings.real_mpfr import is_RealField
+from sage.rings.fraction_field_element import FractionFieldElement
+from sage.rings.finite_rings.element_base import FiniteRingElement
+
+#from .polynomial_element import PolynomialBaseringInjection
+#from .polynomial_real_mpfr_dense import PolynomialRealDense
+#from .polynomial_integer_dense_flint import Polynomial_integer_dense_flint
+from sage.rings.polynomial.polynomial_singular_interface import PolynomialRing_singular_repr
+from sage.rings.polynomial.polynomial_singular_interface import can_convert_to_singular
+
+_CommutativeRings = categories.commutative_rings.CommutativeRings()
+
+#from . import cyclotomic
+
+from sage.interfaces.singular import SingularElement
+
+
+from sage.rings.polynomial.polynomial_ring import is_PolynomialRing
+from sage.rings.polynomial.multi_polynomial_ring import is_MPolynomialRing
+from sage.rings.polynomial.polynomial_ring_constructor import PolynomialRing
+
+from sage.structure.category_object import normalize_names
+import sage.rings.ring as ring
+import sage.rings.padics.padic_base_leaves as padic_base_leaves
+
+from sage.rings.integer import Integer
+from sage.rings.finite_rings.finite_field_base import is_FiniteField
+from sage.rings.finite_rings.integer_mod_ring import is_IntegerModRing
+
+from sage.misc.cachefunc import weak_cached_function
+
+from sage.categories.fields import Fields
+_Fields = Fields()
+from sage.categories.commutative_rings import CommutativeRings
+_CommutativeRings = CommutativeRings()
+from sage.categories.complete_discrete_valuation import CompleteDiscreteValuationRings, CompleteDiscreteValuationFields
+_CompleteDiscreteValuationRings = CompleteDiscreteValuationRings()
+_CompleteDiscreteValuationFields = CompleteDiscreteValuationFields()
+
+import sage.misc.weak_dict
+_cache = sage.misc.weak_dict.WeakValueDictionary()
+
+from sage.rings.morphism cimport RingHomomorphism_from_base
+
+
+cdef class PolynomialRingHomomorphism_from_base(RingHomomorphism_from_base):
+	pass
+
+#NOT TESTED IMPORTS
+import gc
+import time
+gc.enable()
+
+
+from numpy import sqrt, pi, sin, cos
+from sage.rings.complex_mpfr cimport *
+from sage.rings.complex_arb cimport *
+from sage.rings.complex_mpc cimport *
+from sage.libs.mpc.types cimport mpc_t, mpc_rnd_t
+
+
+#MULTIPROCESSING TOOLS PYTHON(CYTHON DOSNT WORK CAUSE OF GILL NEDDED)
+
+
+#LAGRANGE INTER SECTION
+
+def divided_difference(self, points, full_table=False):
+	to_base_ring = self.base_ring()
+	points = [tuple(to_base_ring(c) for c in p) for p in points]
+	n = len(points)
+	F = [[points[i][1]] for i in range(n)]
+	for i in range(1, n):
+		for j in range(1, i+1):
+			numer = F[i][j-1] - F[i-1][j-1]
+			denom = points[i][0] - points[i-j][0]
+			F[i].append(numer / denom)
+			if full_table:
+				return F
+			else:
+				return [F[i][i] for i in range(n)]
+
+
+def lagrange_polynomial(self, points, algorithm="divided_difference", previous_row=None):
+	to_base_ring = self.base_ring()
+	points = [[to_base_ring(u) for u in x] for x in points]
+	var = self.gen()
+	if algorithm == "divided_difference":
+		n = len(points)
+		if n == 0:
+			return self.zero()
+
+		F = self.divided_difference(points)
+		P = self.coerce(F[n-1])
+		for i in range(n-2, -1, -1):
+			P *= (var - points[i][0])
+			P += F[i]
+			return P
+	elif algorithm == "neville":
+		if previous_row is None:
+			previous_row = []
+			N = len(points)
+			M = len(previous_row)
+			P = previous_row + [None] * (N - M) # use results of previous computation if available
+			Q = [None] * N
+			for i in range(M, N):
+				Q[0] = self.coerce(points[i][1])  # start populating the current row
+				for j in range(1, 1 + i):
+					numer = (var - points[i - j][0]) * Q[j - 1] - (var - points[i][0]) * P[j - 1]
+					denom = points[i][0] - points[i - j][0]
+					Q[j] = numer / denom
+					P, Q = Q, P # the current row is complete, reuse the old P to hold the next row
+				return P # return the last row in the Neville table
+
+	else:
+		raise ValueError("algorithm must be one of 'divided_difference' or 'neville'")
+	
+	
+
+#SKEW POLINOMIAL RING LAGRANGE INTERPOLATION
+
+def _lag_polynomial(R, eval_pts, values):
+	l = len(eval_pts)
+	if l == 1:
+		if eval_pts[0].is_zero():
+			# This is due to linear dependence among the eval_pts.
+			raise ValueError("the given evaluation points are linearly dependent"
+							 " over the fixed field of the twisting morphism,"
+							 " so a Lagrange polynomial could not be determined"
+							 " (and might not exist)")
+		return (values[0] / eval_pts[0]) * R.one()
+	else:
+		t = l // 2
+		A = eval_pts[:t]
+		B = eval_pts[t:]
+		M_A = _minimal_vanishing_polynomial(R, A)
+		M_B = _minimal_vanishing_polynomial(R, B)
+		A_ = M_B.multi_point_evaluation(A)
+		B_ = M_A.multi_point_evaluation(B)
+		I_1 = _lag_polynomial(R, A_, values[:t])
+		I_2 = _lag_polynomial(R, B_, values[t:])
+		return I_1 * M_B + I_2 * M_A
+
+
+
+def _minimal_vanishing_polynomial(R, eval_pts):
+	l = len(eval_pts)
+	if l == 0:
+		return R.one()
+	elif l == 1:
+		e = eval_pts[0]
+		if e.is_zero():
+			return R.one()
+		else:
+			return R.gen() - R.twisting_morphism()(e) / e
+	else:
+		t = l // 2
+		A = eval_pts[:t]
+		B = eval_pts[t:]
+		M_A = _minimal_vanishing_polynomial(R, A)
+		B_moved = M_A.multi_point_evaluation(B)
+		M_at_B_moved = _minimal_vanishing_polynomial(R, B_moved)
+		return M_at_B_moved * M_A
+
+
+#CORE 
+
+cpdef n = 2
+cpdef p = 2
+
+
+
+cpdef K = GF(p**n) #FINITE FIELD 
+cpdef FFlist = list(K) #LISTING FINITE FIELD
+cpdef FFstar = []
+for i in range(1,len(FFlist)):
+	FFstar.append(FFlist[i])
+
+print (FFlist)
+R = K['x']
+z2 = R.base_ring().gen()
+
+cpdef z = -1 # np.exp(2*pi*I/p) subed for -1 because the import of complex numbers doesnt work properly
+
+
+#TRACE FUNCTION
+cpdef trace(x):
+	val = 0
+	for s in range(0,n):
+		val = val + x**(p**s)
+	return(val)
+
+
+#TESTING+DEBUGING SECTION(SIMPLE SECTION)
+
+cpdef zero(x):
+	return x*x #Working great
+	
+cpdef interpol(R, x):
+	return(R.lagrange_polynomial(x))
+	
+cpdef int count = 0
+
+
+#RANDOM CODE IMPORTS
+from itertools import product
+import gc
+import random
+import numpy as np
+
+'''
+#CORECODE MOD FOR RANDOM 1.0
+start_time = time.time()
+number_of_functions = int(input())
+cpdef str collected = "COLLECTED"
+while  number_of_functions > 0:
+	polin2 = [(FFlist[j],random.choice(FFlist)) for j in range(len(FFlist))]
+	usepol = R.lagrange_polynomial(polin2)
+	number_of_functions -= 1
+	for c in FFstar:
+		checker = True
+		for b in FFstar:
+			for a in FFlist:
+				number = 0
+				for x in FFlist:
+					result2 = z**(ZZ(trace(b*(usepol(x+a)+c*usepol(x)+x*trace(a)))))
+					number += result2
+				if(number != 0):
+					checker = False
+					if(number_of_functions%15000 == 0):
+						print(collected,number_of_functions,(time.time() - start_time))
+						gc.collect()
+					break
+				else:
+					continue
+				break
+			else:
+				continue
+			break
+		if(checker == True):
+			print(usepol,c)
+		else:
+			continue
+
+print("--- %s seconds ---" % (time.time() - start_time))
+
+
+
+
+
+'''
+#CORECODE C-defs only (VERSION 1.3.0 FULLY FUNCTIONAL DO NOT TOUCH!!!!!)
+
+start_time = time.time()
+cpdef allcount = 0
+cpdef somenum = 0
+cpdef zeroconf = 0
+cpdef somelist = []
+for roll in product(FFlist, repeat = p**n):
+	polin = [(FFlist[j],roll[j]) for j in range(len(FFlist))]
+	usepol = interpol(R, polin)
+	somenum += 1
+	for c in FFstar:
+		checker = True
+		for b in FFstar:
+			for a in FFlist:
+				number = 0
+				for x in FFlist:
+					result2 = z**(ZZ(trace(b*(usepol(x+a)+c*usepol(x)+x*trace(a)))))
+					number += result2
+				if(number != 0):
+					checker = False
+					if(somenum%10000 == 0):
+						print("COLLECTED","--- %s seconds ---" % (time.time() - start_time))
+						print(somenum)
+						gc.collect()
+					break
+			
+				else:
+					continue
+				break
+			else:
+				continue
+			break
+		if(checker == True):
+				polc = (usepol,c)
+				zeroconf = zeroconf +1
+				somelist.append(polc)
+
+print(somelist)
+print(zeroconf)
+print(somenum)
+print("--- %s seconds ---" % (time.time() - start_time))
+
+
+
+#ADDITIONAL multipoc imports 
+from cython.parallel import prange
+
+#Multiprocessing version - doesnt work cause of the data type
+
+
+
+#POLYNOMIAL RING CONSTRUCTOR
+
+
+def PolynomialRing(base_ring, *args, **kwds):
+	if not ring.is_Ring(base_ring):
+		raise TypeError("base_ring {!r} must be a ring".format(base_ring))
+
+	n = -1  # Unknown number of variables
+	names = None  # Unknown variable names
+
+	multivariate = kwds.get("implementation") == "singular"
+	
+	if any(arg is None for arg in args):
+		raise TypeError("invalid arguments {!r} for PolynomialRing".format(args))
+
+	if "var_array" in kwds:
+		for forbidden in "name", "names":
+			if forbidden in kwds:
+				raise TypeError("keyword argument '%s' cannot be combined with 'var_array'" % forbidden)
+
+		names = kwds.pop("var_array")
+		if isinstance(names, (tuple, list)):
+			dim = 1
+		else:
+
+			names = normalize_names(-1, names)
+			dim = len(names) > 1
+		multivariate = True
+
+		if not args:
+			raise TypeError("you must specify the number of the variables")
+		if len(args) == 1 and not dim:
+			args = [args[0], args[0]]
+
+
+		suffixes = [""]
+		for arg in args:
+			k = Integer(arg)
+			if k < 0:
+				raise ValueError("number of variables must be non-negative")
+			suffixes = [s + str(i) for s in suffixes for i in range(k)]
+		names = [v + s for s in suffixes for v in names]
+	else:  # No "var_array" keyword
+		if "name" in kwds:
+			if "names" in kwds:
+				raise TypeError("keyword argument 'name' cannot be combined with 'names'")
+			names = [kwds.pop("name")]
+
+		for arg in args:
+			try:
+				k = Integer(arg)
+			except TypeError:
+				# Interpret arg as names
+				if names is not None:
+					raise TypeError("variable names specified twice: %r and %r" % (names, arg))
+				names = arg
+			else:
+				# Interpret arg as number of variables
+				if n >= 0:
+					raise TypeError("number of variables specified twice: %r and %r" % (n, arg))
+				if k < 0:
+					raise ValueError("number of variables must be non-negative")
+				n = k
+				# If number of variables was explicitly given, always
+				# return a multivariate ring
+				multivariate = True
+
+	if names is None:
+		try:
+			names = kwds.pop("names")
+		except KeyError:
+			raise TypeError("you must specify the names of the variables")
+
+	names = normalize_names(n, names)
+	if "names" in kwds:
+		kwnames = kwds.pop("names")
+		if kwnames != names:
+			raise TypeError("variable names specified twice inconsistently: %r and %r" % (names, kwnames))
+
+	if multivariate or len(names) != 1:
+		return _multi_variate(base_ring, names, **kwds)
+	else:
+		return _single_variate(base_ring, names, **kwds)
+
+
+def unpickle_PolynomialRing(base_ring, arg1=None, arg2=None, sparse=False):
+	args = [arg for arg in (arg1, arg2) if arg is not None]
+	return PolynomialRing(base_ring, *args, sparse=sparse)
+
+from sage.misc.persist import register_unpickle_override
+register_unpickle_override('sage.rings.polynomial.polynomial_ring_constructor', 'PolynomialRing', unpickle_PolynomialRing)
+
+
+def _get_from_cache(key):
+	key = tuple(key)
+	return _cache.get(key)
+
+
+def _save_in_cache(key, R):
+	key = tuple(key)
+	_cache[key] = R
+
+
+def _single_variate(base_ring, name, sparse=None, implementation=None, order=None):
+	# The "order" argument is unused, but we allow it (and ignore it)
+	# for consistency with the multi-variate case.
+	sparse = bool(sparse)
+
+	# "implementation" must be last
+	key = [base_ring, name, sparse, implementation]
+	R = _get_from_cache(key)
+	if R is not None:
+		return R
+
+	from . import polynomial_ring
+
+	# Find the right constructor and **kwds for our polynomial ring
+	constructor = None
+	kwds = {}
+	if sparse:
+		kwds["sparse"] = True
+
+	# Specialized implementations
+	specialized = None
+	if is_IntegerModRing(base_ring):
+		n = base_ring.order()
+		if n.is_prime():
+			specialized = polynomial_ring.PolynomialRing_dense_mod_p
+		elif n > 1:  # Specialized code breaks for n == 1
+			specialized = polynomial_ring.PolynomialRing_dense_mod_n
+	elif is_FiniteField(base_ring):
+		specialized = polynomial_ring.PolynomialRing_dense_finite_field
+	elif isinstance(base_ring, padic_base_leaves.pAdicFieldCappedRelative):
+		specialized = polynomial_ring.PolynomialRing_dense_padic_field_capped_relative
+	elif isinstance(base_ring, padic_base_leaves.pAdicRingCappedRelative):
+		specialized = polynomial_ring.PolynomialRing_dense_padic_ring_capped_relative
+	elif isinstance(base_ring, padic_base_leaves.pAdicRingCappedAbsolute):
+		specialized = polynomial_ring.PolynomialRing_dense_padic_ring_capped_absolute
+	elif isinstance(base_ring, padic_base_leaves.pAdicRingFixedMod):
+		specialized = polynomial_ring.PolynomialRing_dense_padic_ring_fixed_mod
+
+	# If the implementation is supported, then we are done
+	if specialized is not None:
+		implementation_names = specialized._implementation_names_impl(implementation, base_ring, sparse)
+		if implementation_names is not NotImplemented:
+			implementation = implementation_names[0]
+			constructor = specialized
+
+	# Generic implementations
+	if constructor is None:
+		if not isinstance(base_ring, ring.CommutativeRing):
+			constructor = polynomial_ring.PolynomialRing_general
+		elif base_ring in _CompleteDiscreteValuationRings:
+			constructor = polynomial_ring.PolynomialRing_cdvr
+		elif base_ring in _CompleteDiscreteValuationFields:
+			constructor = polynomial_ring.PolynomialRing_cdvf
+		elif base_ring.is_field(proof=False):
+			constructor = polynomial_ring.PolynomialRing_field
+		elif base_ring.is_integral_domain(proof=False):
+			constructor = polynomial_ring.PolynomialRing_integral_domain
+		else:
+			constructor = polynomial_ring.PolynomialRing_commutative
+		implementation_names = constructor._implementation_names(implementation, base_ring, sparse)
+		implementation = implementation_names[0]
+
+		# Only use names which are not supported by the specialized class.
+		if specialized is not None:
+			implementation_names = [n for n in implementation_names if
+					specialized._implementation_names_impl(n, base_ring, sparse) is NotImplemented]
+
+	if implementation is not None:
+		kwds["implementation"] = implementation
+	R = constructor(base_ring, name, **kwds)
+
+	for impl in implementation_names:
+		key[-1] = impl
+		_save_in_cache(key, R)
+
+	return R
+
+
+def _multi_variate(base_ring, names, sparse=None, order="degrevlex", implementation=None):
+	if sparse is None:
+		sparse = True
+	if not sparse:
+		raise NotImplementedError("a dense representation of multivariate polynomials is not supported")
+
+	from sage.rings.polynomial.term_order import TermOrder
+	n = len(names)
+	order = TermOrder(order, n)
+
+	# "implementation" must be last
+	key = [base_ring, names, n, order, implementation]
+	R = _get_from_cache(key)
+	if R is not None:
+		return R
+
+	# Multiple arguments for the "implementation" keyword which actually
+	# yield the same implementation. We need this for caching.
+	implementation_names = set([implementation])
+
+	if implementation is None or implementation == "singular":
+		from sage.rings.polynomial.multi_polynomial_libsingular import MPolynomialRing_libsingular
+		try:
+			R = MPolynomialRing_libsingular(base_ring, n, names, order)
+		except (TypeError, NotImplementedError):
+			if implementation is not None:
+				raise
+		else:
+			implementation_names.update([None, "singular"])
+
+	if R is None and implementation is None:
+		# Interpret implementation=None as implementation="generic"
+		implementation = "generic"
+		implementation_names.add(implementation)
+		key[-1] = implementation
+		R = _get_from_cache(key)
+
+	if R is None and implementation == "generic":
+		from . import multi_polynomial_ring
+		if isinstance(base_ring, ring.IntegralDomain):
+			constructor = multi_polynomial_ring.MPolynomialRing_polydict_domain
+		else:
+			constructor = multi_polynomial_ring.MPolynomialRing_polydict
+		R = constructor(base_ring, n, names, order)
+
+	if R is None:
+		raise ValueError("unknown implementation %r for multivariate polynomial rings" % (implementation,))
+
+	for impl in implementation_names:
+		key[-1] = impl
+		_save_in_cache(key, R)
+
+	return R
+
+
+#########################################################
+# Choice of a category
+
+
+from sage import categories
+from sage.categories.algebras import Algebras
+# Some fixed categories, in order to avoid the function call overhead
+_FiniteSets = categories.sets_cat.Sets().Finite()
+_InfiniteSets = categories.sets_cat.Sets().Infinite()
+_EuclideanDomains = categories.euclidean_domains.EuclideanDomains()
+_UniqueFactorizationDomains = categories.unique_factorization_domains.UniqueFactorizationDomains()
+_IntegralDomains = categories.integral_domains.IntegralDomains()
+_Rings = categories.rings.Rings()
+
+
+@weak_cached_function
+def polynomial_default_category(base_ring_category, n_variables):
+	category = Algebras(base_ring_category)
+
+	if n_variables:
+		# here we assume the base ring to be nonzero
+		category = category.Infinite()
+	else:
+		if base_ring_category.is_subcategory(_Fields):
+			category = category & _Fields
+
+		if base_ring_category.is_subcategory(_FiniteSets):
+			category = category.Finite()
+		elif base_ring_category.is_subcategory(_InfiniteSets):
+			category = category.Infinite()
+
+	if base_ring_category.is_subcategory(_Fields) and n_variables == 1:
+		return category & _EuclideanDomains
+	elif base_ring_category.is_subcategory(_UniqueFactorizationDomains):
+		return category & _UniqueFactorizationDomains
+	elif base_ring_category.is_subcategory(_IntegralDomains):
+		return category & _IntegralDomains
+	elif base_ring_category.is_subcategory(_CommutativeRings):
+		return category & _CommutativeRings
+	return category
+
+
+def BooleanPolynomialRing_constructor(n=None, names=None, order="lex"):
+	if isinstance(n, str):
+		names = n
+		n = -1
+	elif n is None:
+		n = -1
+
+	names = normalize_names(n, names)
+	n = len(names)
+
+	from sage.rings.polynomial.term_order import TermOrder
+
+	order = TermOrder(order, n)
+
+	key = ("pbori", names, n, order)
+	R = _get_from_cache(key)
+	if not R is None:
+		return R
+
+	from sage.rings.polynomial.pbori.pbori import BooleanPolynomialRing
+	R = BooleanPolynomialRing(n, names, order)
+
+	_save_in_cache(key, R)
+	return R
